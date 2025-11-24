@@ -62,7 +62,7 @@ To establish a performance baseline for our lightweight student architecture. Th
 - **Loss Function:** L1 Loss
 - **Optimizer:** Adam (lr = 2e-4)
 - **Scheduler:** MultiStepLR
-- **Total Iterations (for final run):** 100,000
+- **Total Iterations (for final run):** 10,000
 
 **Execution Notes:**
 
