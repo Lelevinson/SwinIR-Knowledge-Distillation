@@ -27,8 +27,6 @@ class ModelPlain(ModelBase):
         if self.opt_train['E_decay'] > 0:
             self.netE = define_G(opt).to(self.device).eval()
 
-        # ---- START OF OUR NEW CODE ----
-        #
         #    First, we will check our JSON file for a new "distillation_type" setting.
         #    This is the "switch" that will control our different experiments.
         self.distillation_type = self.opt_train.get('distillation_type', 'none')
@@ -58,8 +56,6 @@ class ModelPlain(ModelBase):
             
             # D. We need to tell the Professor where to find the Teacher's pre-trained brain.
             #    We will add a new setting in our JSON file for this.
-            # I am making an assumption that the key in the JSON will be 'pretrained_netTeacher'.
-            # Please let me know if you would prefer a different name for this setting.
             load_path_Teacher = self.opt['path']['pretrained_netTeacher']
             
             # E. Load the Teacher's brain and freeze it.
@@ -93,7 +89,6 @@ class ModelPlain(ModelBase):
                     self.projectors.append(
                         nn.Linear(teacher_dim, student_dim).to(self.device)
                     )
-        # ---- END OF OUR NEW CODE ----
 
     """
     # ----------------------------------------
@@ -169,8 +164,7 @@ class ModelPlain(ModelBase):
         else:
             raise NotImplementedError('Loss type [{:s}] is not found.'.format(G_lossfn_type))
         self.G_lossfn_weight = self.opt_train['G_lossfn_weight']
-        # ---- START OF OUR NEW CODE ----
-        #
+
         # A. Check our "switch". If distillation is active, we need to prepare
         #    a new "exam paper" for it.
         if self.distillation_type != 'none':
@@ -178,8 +172,6 @@ class ModelPlain(ModelBase):
             
             # B. We will add a new setting to our JSON to control the type of
             #    exam and its importance (weight).
-            # I am making an assumption that the keys will be 'distill_lossfn_type'
-            # and 'distill_lossfn_weight'. Please let me know if you prefer others.
             distill_loss_type = self.opt_train.get('distill_lossfn_type', 'l1')
             self.distill_loss_weight = self.opt_train.get('distill_lossfn_weight', 1.0)
             
@@ -191,7 +183,7 @@ class ModelPlain(ModelBase):
                 self.distill_lossfn = nn.MSELoss().to(self.device)
             else:
                 raise NotImplementedError(f'Distillation Loss type [{distill_loss_type}] is not found.')
-        # ---- END OF OUR NEW CODE ----
+
             # ---- START OF OUR NEW CODE FOR MODEL C ----
             #
             # A. Check if our switch is set to 'feature'. This activates the
@@ -200,8 +192,6 @@ class ModelPlain(ModelBase):
                 print("Defining the Feature Distillation Loss.")
                 
                 # B. Get the settings for our new exam from the JSON curriculum.
-                # I am making an assumption that the keys will be 'feature_lossfn_type'
-                # and 'feature_lossfn_weight'.
                 feature_loss_type = self.opt_train.get('feature_lossfn_type', 'l1')
                 self.feature_loss_weight = self.opt_train.get('feature_lossfn_weight', 1.0)
                 
@@ -226,12 +216,10 @@ class ModelPlain(ModelBase):
                 G_optim_params.append(v)
             else:
                 print('Params [{:s}] will not optimize.'.format(k))
-        # ---- START OF OUR FINAL CODE CHANGE ----
         # If we have translators, their parameters must also be trained.
         if self.distillation_type == 'feature':
             for proj in self.projectors:
                 G_optim_params.extend(proj.parameters())
-        # ---- END OF OUR FINAL CODE CHANGE ----
         if self.opt_train['G_optimizer_type'] == 'adam':
             self.G_optimizer = Adam(G_optim_params, lr=self.opt_train['G_optimizer_lr'],
                                     betas=self.opt_train['G_optimizer_betas'],
