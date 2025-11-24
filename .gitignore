@@ -1,0 +1,18 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE and editor folders
+.vscode/
+.idea/
+
+# Datasets - Do not upload large data
+trainsets/
+model_zoo/
+
+# Experimental results - Do not upload generated models and logs
+superresolution/
+results/
+
+# Any other local configuration files
+*.local
