@@ -806,7 +806,6 @@ class SwinIR_Student(nn.Module):
         
 
     def forward(self, x):
-        # This line is CRITICAL. It empties the backpack for each new forward pass.
         self.intermediate_features = []
         
         H, W = x.shape[2:]

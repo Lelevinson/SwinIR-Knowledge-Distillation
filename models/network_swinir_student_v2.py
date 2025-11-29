@@ -240,6 +240,8 @@ class SwinTransformerBlock(nn.Module):
         H, W = x_size
         B, L, C = x.shape
         # assert L == H * W, "input feature has wrong size"
+        
+        original_input = x  # <-- OUR NEW LINE (1 of 2)
 
         shortcut = x
         x = self.norm1(x)
@@ -255,15 +257,15 @@ class SwinTransformerBlock(nn.Module):
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
 
-        # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
+        # W-MSA/SW-MSA
         if self.input_resolution == x_size:
-            attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+            attn_windows = self.attn(x_windows, mask=self.attn_mask)
         else:
             attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x.device))
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
+        shifted_x = window_reverse(attn_windows, self.window_size, H, W)
 
         # reverse cyclic shift
         if self.shift_size > 0:
@@ -275,6 +277,8 @@ class SwinTransformerBlock(nn.Module):
         # FFN
         x = shortcut + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
+        
+        x = x + original_input # <-- OUR NEW LINE (2 of 2)
 
         return x
 
@@ -615,7 +619,7 @@ class UpsampleOneStep(nn.Sequential):
         return flops
 
 
-class SwinIR(nn.Module):
+class SwinIR_Student_v2(nn.Module):
     r""" SwinIR
         A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
 
@@ -650,7 +654,7 @@ class SwinIR(nn.Module):
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False, upscale=2, img_range=1., upsampler='', resi_connection='1conv',
                  **kwargs):
-        super(SwinIR, self).__init__()
+        super(SwinIR_Student_v2, self).__init__()
         num_in_ch = in_chans
         num_out_ch = in_chans
         num_feat = 64
@@ -803,6 +807,7 @@ class SwinIR(nn.Module):
         x = self.patch_unembed(x, x_size)
         
         return x, intermediate_features
+        
 
     def forward(self, x):
         self.intermediate_features = []
@@ -867,7 +872,7 @@ if __name__ == '__main__':
     window_size = 8
     height = (1024 // upscale // window_size + 1) * window_size
     width = (720 // upscale // window_size + 1) * window_size
-    model = SwinIR(upscale=2, img_size=(height, width),
+    model = SwinIR_Student(upscale=2, img_size=(height, width),
                    window_size=window_size, img_range=1., depths=[6, 6, 6, 6],
                    embed_dim=60, num_heads=[6, 6, 6, 6], mlp_ratio=2, upsampler='pixelshuffledirect')
     print(model)

@@ -217,6 +217,23 @@ def define_G(opt):
                 mlp_ratio=opt_net['mlp_ratio'],
                 upsampler=opt_net['upsampler'],
                 resi_connection=opt_net['resi_connection'])
+        
+    # ----------------------------------------
+    # SwinIR_Student_V2
+    # ----------------------------------------
+    elif net_type == 'swinir_student_v2': # <-- OUR NEW BLOCK
+        from models.network_swinir_student_v2 import SwinIR_Student_v2 as net
+        netG = net(upscale=opt_net['upscale'],
+                in_chans=opt_net['in_chans'],
+                img_size=opt_net['img_size'],
+                window_size=opt_net['window_size'],
+                img_range=opt_net['img_range'],
+                depths=opt_net['depths'],
+                embed_dim=opt_net['embed_dim'],
+                num_heads=opt_net['num_heads'],
+                mlp_ratio=opt_net['mlp_ratio'],
+                upsampler=opt_net['upsampler'],
+                resi_connection=opt_net['resi_connection'])
 
     # ----------------------------------------
     # VRT
