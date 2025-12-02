@@ -36,7 +36,7 @@
 	},
 
 	"netG": {
-		"net_type": "swinir_student",
+		"net_type": "swinir_student_v2",
 		"upscale": 4, // 2 | 3  | 4 | 8
 		"in_chans": 3,
 		"img_size": 64, // For fair comparison, LR patch size is set to 48 or 64 when compared with RCAN or RRDB.
