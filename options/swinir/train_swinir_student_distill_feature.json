@@ -1,5 +1,5 @@
 {
-	"task": "student_C_distill_feature_x4", //  classical image sr for x2/x3/x4/x8. root/task/images-models-options
+	"task": "student_C_v1_delayed_x4", // Unique name for this experiment
 	"model": "plain", // "plain" | "plain2" if two inputs
 	"gpu_ids": [0],
 	"dist": false,
@@ -9,9 +9,9 @@
 
 	"path": {
 		"root": "superresolution", // "denoising" | "superresolution" | "dejpeg"
-		"pretrained_netG": null, // path of pretrained model. We fine-tune X3/X4/X8 models from X2 model, so that `G_optimizer_lr` and `G_scheduler_milestones` can be halved to save time.
+		"pretrained_netG": null, // path of pretrained model for resuming
 		"pretrained_netE": null, // path of pretrained model
-		"pretrained_netTeacher": "model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth"
+		"pretrained_netTeacher": "model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth" // Path to our Teacher model
 	},
 
 	"datasets": {
@@ -48,18 +48,19 @@
 		"mlp_ratio": 2,
 		"upsampler": "pixelshuffle", // "pixelshuffle" | "pixelshuffledirect" | "nearest+conv" | null
 		"resi_connection": "1conv", // "1conv" | "3conv"
-
 		"init_type": "default"
 	},
 
 	"train": {
 		"G_lossfn_type": "l1", // "l1" preferred | "l2sum" | "l2" | "ssim" | "charbonnier"
 		"G_lossfn_weight": 1.0, // default
+
 		"distillation_type": "feature",
 		"distill_lossfn_type": "l1",
 		"distill_lossfn_weight": 1.0,
 		"feature_lossfn_type": "l1",
-		"feature_lossfn_weight": 0.01,
+		"feature_lossfn_weight": 0.01, // Reduced weight to balance losses
+		"start_feature_iter": 4000, // Delayed start for the feature loss
 
 		"E_decay": 0.999, // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
 
