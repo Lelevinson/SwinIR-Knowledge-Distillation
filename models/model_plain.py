@@ -27,18 +27,13 @@ class ModelPlain(ModelBase):
         if self.opt_train['E_decay'] > 0:
             self.netE = define_G(opt).to(self.device).eval()
 
-        #    First, we will check our JSON file for a new "distillation_type" setting.
-        #    This is the "switch" that will control our different experiments.
         self.distillation_type = self.opt_train.get('distillation_type', 'none')
 
-        # A. If the switch is not 'none', we need to hire the Teacher.
         if self.distillation_type != 'none':
             print("Knowledge Distillation is active. Loading the Teacher model.")
 
-            # B. Define the Teacher's architecture. These are the parameters for the
-            #    large, original SwinIR model. They are hardcoded here.
             teacher_args = {
-                'upscale': self.opt['scale'], # Use the same scale as our student
+                'upscale': self.opt['scale'],
                 'in_chans': 3,
                 'img_size': 64,
                 'window_size': 8,
@@ -51,44 +46,32 @@ class ModelPlain(ModelBase):
                 'resi_connection': '1conv'
             }
             
-            # C. Build the Teacher model from the blueprint and move it to the GPU.
             self.netTeacher = TeacherModel(**teacher_args).to(self.device)
-            
-            # D. We need to tell the Professor where to find the Teacher's pre-trained brain.
-            #    We will add a new setting in our JSON file for this.
             load_path_Teacher = self.opt['path']['pretrained_netTeacher']
             
-            # E. Load the Teacher's brain and freeze it.
             print(f"Loading Teacher model from: {load_path_Teacher}")
             teacher_state_dict = torch.load(load_path_Teacher)
             self.netTeacher.load_state_dict(teacher_state_dict['params'] if 'params' in teacher_state_dict.keys() else teacher_state_dict, strict=True)
             
-            # F. Freeze the Teacher model. This is critical. We are only learning FROM the
-            #    teacher, not changing it. This ensures its brain is read-only.
             for param in self.netTeacher.parameters():
                 param.requires_grad = False
             
-            # G. Put the teacher in "evaluation mode". This also ensures it doesn't change.
             self.netTeacher.eval()
-            # H. If we are doing feature distillation, we need to create "translators"
-            #    to map the Teacher's large thoughts to the Student's smaller thoughts.
+
             if self.distillation_type == 'feature':
                 print("Creating feature distillation projection layers.")
-                
-                # We need one translator for each of the Student's "thought" stages.
-                # The Student has 4 RSTB blocks.
                 num_student_layers = len(self.opt['netG']['depths'])
-                
-                # The Teacher's language is 180 words. The Student's is 60.
                 teacher_dim = 180
                 student_dim = self.opt['netG']['embed_dim']
                 
-                # Create a list of translator layers. Each one is a simple linear network.
-                self.projectors = nn.ModuleList()
+                # Renamed self.projectors to self.netP to mark it as a network
+                self.netP = nn.ModuleList()
                 for _ in range(num_student_layers):
-                    self.projectors.append(
+                    self.netP.append(
                         nn.Linear(teacher_dim, student_dim).to(self.device)
                     )
+                # Pass the new network to the device manager
+                self.netP = self.model_to_device(self.netP)
 
     """
     # ----------------------------------------
@@ -127,6 +110,13 @@ class ModelPlain(ModelBase):
                 self.update_E(0)
             self.netE.eval()
 
+        # Add logic to load the Projector network (netP) if it exists
+        if self.distillation_type == 'feature':
+            load_path_P = self.opt['path']['pretrained_netP']
+            if load_path_P is not None:
+                print('Loading model for P [{:s}] ...'.format(load_path_P))
+                self.load_network(load_path_P, self.netP, strict=True, param_key='params')
+
     # ----------------------------------------
     # load optimizer
     # ----------------------------------------
@@ -145,6 +135,10 @@ class ModelPlain(ModelBase):
             self.save_network(self.save_dir, self.netE, 'E', iter_label)
         if self.opt_train['G_optimizer_reuse']:
             self.save_optimizer(self.save_dir, self.G_optimizer, 'optimizerG', iter_label)
+
+        # Add logic to save the Projector network (netP)
+        if self.distillation_type == 'feature':
+            self.save_network(self.save_dir, self.netP, 'P', iter_label)
 
     # ----------------------------------------
     # define loss
@@ -216,10 +210,11 @@ class ModelPlain(ModelBase):
                 G_optim_params.append(v)
             else:
                 print('Params [{:s}] will not optimize.'.format(k))
-        # If we have translators, their parameters must also be trained.
+        
+        # Add the parameters of the Projector network (netP) to the optimizer
         if self.distillation_type == 'feature':
-            for proj in self.projectors:
-                G_optim_params.extend(proj.parameters())
+            G_optim_params.extend(self.netP.parameters())
+
         if self.opt_train['G_optimizer_type'] == 'adam':
             self.G_optimizer = Adam(G_optim_params, lr=self.opt_train['G_optimizer_lr'],
                                     betas=self.opt_train['G_optimizer_betas'],
@@ -271,53 +266,35 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def optimize_parameters(self, current_step):
         self.G_optimizer.zero_grad()
-
-        # Step 1: Run the student's forward pass. This single call calculates
-        # the final output (self.E) and fills the student's backpack.
         self.netG_forward()
 
-        # Step 2: Initialize the total loss with the standard L1 loss
-        # against the ground-truth. This is our base grade.
         l_g_total = self.G_lossfn_weight * self.G_lossfn(self.E, self.H)
         self.log_dict['l_g_L1'] = l_g_total.item()
 
-        # Step 3: If we are doing any kind of distillation...
         if self.distillation_type != 'none':
-            
-            # Get the Teacher's final answer and its internal "thoughts".
             with torch.no_grad():
                 teacher_output = self.netTeacher(self.L)
                 teacher_thoughts = self.netTeacher.intermediate_features
             
-            # Calculate the response-based distillation loss (used for both Model B and C).
             l_g_distill = self.distill_loss_weight * self.distill_lossfn(self.E, teacher_output)
             l_g_total += l_g_distill
             self.log_dict['l_g_distill'] = l_g_distill.item()
 
-            # Step 4: If we are doing the advanced FEATURE distillation (Model C)...
             if self.distillation_type == 'feature':
-                # Get the student's internal "thoughts" from its backpack.
                 student_thoughts = self.netG.module.intermediate_features
                 
-                # Calculate the feature loss using our "translators".
                 l_g_feature = torch.tensor(0.0).to(self.device)
                 for i in range(len(student_thoughts)):
                     student_thought = student_thoughts[i]
-                    
-                    # Use the i-th translator to map the Teacher's complex thought
-                    # to the Student's simpler thought space before comparing.
-                    teacher_thought_translated = self.projectors[i](teacher_thoughts[i])
-                    
+                    # Use self.netP (the correct name) to do the translation
+                    teacher_thought_translated = self.netP[i](teacher_thoughts[i])
                     l_g_feature += self.feature_loss_weight * self.feature_lossfn(student_thought, teacher_thought_translated)
                 
                 l_g_total += l_g_feature
                 self.log_dict['l_g_feature'] = l_g_feature.item()
 
-        # Step 5: Backpropagate the final, combined loss.
         l_g_total.backward()
 
-        # The original KAIR code for clipping gradients, stepping the optimizer, etc.
-        # This part remains unchanged.
         G_optimizer_clipgrad = self.opt_train['G_optimizer_clipgrad'] if self.opt_train['G_optimizer_clipgrad'] else 0
         if G_optimizer_clipgrad > 0:
             torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=self.opt_train['G_optimizer_clipgrad'], norm_type=2)
