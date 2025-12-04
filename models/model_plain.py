@@ -287,7 +287,7 @@ class ModelPlain(ModelBase):
                 for i in range(len(student_thoughts)):
                     student_thought = student_thoughts[i]
                     # Use self.netP (the correct name) to do the translation
-                    teacher_thought_translated = self.netP[i](teacher_thoughts[i])
+                    teacher_thought_translated = self.netP.module[i](teacher_thoughts[i])
                     l_g_feature += self.feature_loss_weight * self.feature_lossfn(student_thought, teacher_thought_translated)
                 
                 l_g_total += l_g_feature
