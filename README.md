@@ -79,7 +79,7 @@ When we create the configuration files (`.json`) for these new tasks, we will si
 The pre-trained models (the "brains") are not included in this repository due to their large size. We have prepared a separate guide with download scripts for all official SwinIR models.
 
 - Our distillation experiments require a specific **Teacher Model**. Please ensure you have downloaded at least this model: `001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth`.
-- For instructions on how to download this model and all others, please see the guide here: **[DOWNLOAD_MODELS.md](DOWNLOAD_MODELS.md)**.
+- For instructions on how to download this model and all others, please see the guide here: **[DOWNLOAD_MODELS.md](download_models.md)**.
 
 ---
 
